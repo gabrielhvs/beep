@@ -285,6 +285,6 @@ void loop() {
   }
   //delay(1000);
 
-  t = millis(
+  t = millis();
 
 }
