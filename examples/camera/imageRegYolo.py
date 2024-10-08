@@ -9,17 +9,29 @@ import time
 import threading
 import os
 
+import requests 
+import cv2 
+import numpy as np 
+import imutils 
+
 '''
-url='http://192.168.197.35/capture'
-while True:
-    img_resp = urlopen(url)
-    imgnp = np.asarray(bytearray(img_resp.read()), dtype="uint8")
-    img = cv2.imdecode(imgnp, -1)
-    cv2.imshow("Camera", img)
-    if cv2.waitKey(1) == 113:
-        break'''
+url="http://192.168.43.133:8080/shot.jpg"
+  
+# While loop to continuously fetching data from the Url 
+while True: 
+    img_resp = requests.get(url) 
+    img_arr = np.array(bytearray(img_resp.content), dtype=np.uint8) 
+    img = cv2.imdecode(img_arr, -1) 
+    img = imutils.resize(img, width=1000, height=1800) 
+    cv2.imshow("Android_cam", img) 
+  
+    # Press Esc key to exit 
+    if cv2.waitKey(1) == 27: 
+        break
+  
+cv2.destroyAllWindows() 
 
-
+'''
 from ultralytics import YOLO
 import cv2
 import math 
@@ -40,10 +52,8 @@ classNames = ["person", "bicycle", "car", "motorbike", "aeroplane", "bus", "trai
               ]
 
 
-url='http://192.168.123.123/capture'
+url='http://192.168.43.133:8080/shot.jpg'
 
-TCP_IP = '192.168.123.123'
-TCP_PORT = 10000
 
 while True:
     img_resp = urlopen(url)
@@ -76,10 +86,6 @@ while True:
 
             value = str(classNames[cls]) + '-' + str(confidence)
             print(value)
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect((TCP_IP, TCP_PORT))
-            s.send(value.encode())
-            s.close()
 
             # object details
             org = [x1, y1]

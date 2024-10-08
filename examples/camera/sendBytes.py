@@ -6,8 +6,8 @@ import time
 import threading
 import os
 
-TCP_IP = '192.168.123.123'
-TCP_PORT = 10000
+TCP_IP = '192.168.43.104'
+TCP_PORT = 8080
 BUFFER_SIZE = 1024
 value = 0
 i = 0
