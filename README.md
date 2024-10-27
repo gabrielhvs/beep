@@ -27,7 +27,7 @@
 
 <div align="center">
     <a href="https://github.com/gabrielhvs/beep" target="_blank">
-        <img src="https://github.com/gabrielhvs/beep/blob/main/Controller_FeedBackLin/images/Parrot_Mambo_Marc.png?raw=true" 
+        <img src="images/rocketTank.png?raw=true" 
         alt="Mambo Parrot" width="290" height="290">
     </a>
 </div>
