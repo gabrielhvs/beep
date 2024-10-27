@@ -3,14 +3,19 @@ import serial
 import time
 
 
-ser = serial.Serial(
-    port = "/dev/ttyUSB1",
-    baudrate = 1200,
-    parity = serial.PARITY_NONE,
-    stopbits = serial.STOPBITS_ONE,
-    bytesize = serial.EIGHTBITS,
-    timeout  = 0.1
-)
+import socket
+import struct
+import time
+import threading
+import os
+
+HOST = '192.168.123.123'
+PORT = 10000
+BUFFER_SIZE = 1024
+value = 0
+i = 0
+
+
 class Example(tk.Frame):
     def __init__(self, parent):
         tk.Frame.__init__(self, parent, width=400,  height=400)
@@ -42,14 +47,19 @@ class Example(tk.Frame):
         if(event.keysym == "s"):
             right = 510
             left = 510
-        msg = ""
+        msg = "$"
         msg = msg + str(left)
         msg = msg + ";"
         msg = msg + str(right)
-        msg = msg + ";\n"
+        msg = msg + ";$\n"
 
         print(msg)
-        ser.write(msg.encode())
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.connect((HOST, PORT))
+            s.sendall(msg.encode())
+            #data = s.recv(1024)
+            #print(f"Received {data!r}")
+            s.close()
         time.sleep(0.1)
 
 

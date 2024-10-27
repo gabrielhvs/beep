@@ -1,19 +1,13 @@
 #include <Arduino.h>
 #include <Ultrasonic.h>
-//#include "PinChangeInterrupt.h"
+#include "PinChangeInterrupt.h"
 #include <Wire.h>
 #include "rgb_lcd.h"
 #include <Servo.h> 
 #include <Engine.h> 
 #include <SoftI2C.h>
 #include "Adafruit_APDS9960.h"
-#include <SoftwareSerial.h>
-
-// --------- Gesture Sensor ------//
-Adafruit_APDS9960 apdsRight;
-Adafruit_APDS9960 apdsLeft;
-uint8_t diretionRight = 0;
-uint8_t diretionLeft = 0;
+#include <CustomChar.h>
 
 // --------- IMU ------//
 //SoftI2C SoftWire =SoftI2C(14, 15); //sda, scl
@@ -51,20 +45,20 @@ const int PINO_IN2 = 11;
 const int PINO_IN3 = 12;
 const int PINO_IN4 = 13;
 const int PINO_PWM1 = 6;
-const int PINO_PWM2 = 9;
+const int PINO_PWM2 = 8;
 
 const double RAIO_WHEEL = 0.057/2.0;
 
 const double RAIO_ROBOT = 0.13;
 
-const double DEAD_ZONE_ENGINE_LEFT = 130;
-const double DEAD_ZONE_ENGINE_RIGHT = 110;
+const double DEAD_ZONE_ENGINE_LEFT = 150;
+const double DEAD_ZONE_ENGINE_RIGHT = 150;
 
 //Declaracao dos pinos conectados aos canais de saida do encoder
 const int PINO_CH2 = 20;
 const int PINO_CH1 = 7;
 const int PINO_CH4 = 21;
-const int PINO_CH3 = 8;
+const int PINO_CH3 = 9;
 
 Engine engineLeft = Engine(PINO_IN1, PINO_IN2, PINO_PWM1);
 Engine engineRight = Engine(PINO_IN3, PINO_IN4, PINO_PWM2);
@@ -87,9 +81,7 @@ double output = 0;
 bool debug = false;
 
 void interrupt1(){ engineLeft.speedSensor->countPulse1();  }
-void interrupt2(){ engineLeft.speedSensor->countPulse2();  }
-void interrupt3(){ engineRight.speedSensor->countPulse1(); }
-void interrupt4(){ engineRight.speedSensor->countPulse2(); }
+void interrupt2(){ engineRight.speedSensor->countPulse1(); }
 
 //----------------------------- LCD -------------------------------//
 
@@ -101,19 +93,24 @@ const int colorR = 50;
 const int colorG = 50;
 const int colorB = 50;
 
-//----------------------------- HC12 -------------------------------//
+void happyExprression();
+void neutralExprression();
+void centralEyesExprression();
+void blinckExprression();
+void leftEyeExprression();
+void rightEyeExprression();
 
-String msgRecieve = "";
-String msgSend = "";
-SoftwareSerial HC12(3, 2); // HC-12 TX Pin, HC-12 RX Pin
+//------------------------- COLLISION ----------------------//
+
+const int PINO_END_CURSE_1 = 2; 
+const int PINO_END_CURSE_2 = 14;
+const int PINO_END_CURSE_3 = 15;
+const int PINO_END_CURSE_4 = 16;
 
 void setup() {
 
   // ------- DEBUG ----------//  
-  Serial.begin(1200);
-
-  // ------- COMUNICATION ----------//  
-  HC12.begin(1200);
+  Serial.begin(115200);
 
   //------- ENGINES --------//
     
@@ -125,23 +122,26 @@ void setup() {
   engineLeft.stop();
   engineRight.stop();
 
- //Inicializa as interrupcoes com os pinos configurados para chamar as funcoes 
-  //attachPCINT(digitalPinToPCINT(engineLeft.speedSensor->m_pinIn[0]), interrupt1, CHANGE);
-  //attachPCINT(digitalPinToPCINT(engineLeft.speedSensor->m_pinIn[1]), interrupt2, CHANGE);
-  //attachPCINT(digitalPinToPCINT(engineRight.speedSensor->m_pinIn[0]), interrupt3, CHANGE);
-  //attachPCINT(digitalPinToPCINT(engineRight.speedSensor->m_pinIn[1]), interrupt4, CHANGE);
+  //Inicializa as interrupcoes com os pinos configurados para chamar as funcoes 
+  attachPCINT(digitalPinToPCINT(engineLeft.speedSensor->m_pinIn[0]), interrupt1, CHANGE);
+  attachPCINT(digitalPinToPCINT(engineRight.speedSensor->m_pinIn[0]), interrupt2, CHANGE);
  
  //------- LCD --------//
 
   lcd.begin(16, 2);
   lcd.setRGB(colorR, colorG, colorB);
   lcd.print("Iniciando ...");
+  lcd.createCharFromProgmem(1, blockUp);
+  lcd.createCharFromProgmem(2, blockDown);
+  lcd.createCharFromProgmem(3, blockCenter);
+  lcd.createCharFromProgmem(4, blockAll);
+  neutralExprression();
   delay(1000);
   lcd.clear();
 
   // ------- Servo ------- //
 
-  myServo.attach(A0); 
+  myServo.attach(A6); 
   myServo.write(90);
 
   // ------- IMU ------- //
@@ -152,50 +152,18 @@ void setup() {
   Wire.write(0x00);                  // Make reset - place a 0 into the 6B register
   Wire.endTransmission(true);        //end the transmission
   delay(20);
+  calculate_IMU_error();
 
-  // ------- DIRECTION SENSOR ------- //
+  //------- COLLISION --------//
 
-  if(!apdsRight.begin(10, APDS9960_AGAIN_4X, APDS9960_ADDRESS, new SoftI2C(16,15))){
-    Serial.println("failed to initialize device apdsRight! Please check your wiring.");
-    //gesture mode will be entered once proximity mode senses something close
-    apdsRight.enableProximity(true);
-    apdsRight.enableGesture(true);
-    apdsRight.setProximityInterruptThreshold(0, 175);
-  }
-  else Serial.println("Device initialized apdsRight!");
-
-
-  if(!apdsLeft.begin(10, APDS9960_AGAIN_4X, APDS9960_ADDRESS, new SoftI2C(17,15))){
-    Serial.println("failed to initialize device apdsLeft! Please check your wiring.");
-    //gesture mode will be entered once proximity mode senses something close
-    apdsLeft.enableProximity(true);
-    apdsLeft.enableGesture(true);
-    apdsLeft.setProximityInterruptThreshold(0, 175);
-  }
-  else Serial.println("Device initialized apdsLeft!");
-  delay(1000);
+  pinMode(PINO_END_CURSE_1, INPUT);
+  pinMode(PINO_END_CURSE_2, INPUT);
+  pinMode(PINO_END_CURSE_3, INPUT);
+  pinMode(PINO_END_CURSE_4, INPUT);
 
 }
 
 void loop() {
-
-  // ------- COMUNICATION ----------//  
-  static bool conect = false;
-  static uint16_t correctPacks = 0;
-  msgRecieve  = "";
-  /*if(Serial.available() > 0) {   // Enquanto Serial3 receber dados
-    msgRecieve = Serial.readStringUntil('\n');
-    Serial.flush();
-    //Serial3.println(sendData());
-  }*/
-  while (HC12.available()) {        // If HC-12 has data
-    conect = true;
-    msgRecieve += char(HC12.read());      // Send the data to Serial monitor
-  }
-  if(msgRecieve  != ""){
-    Serial.println(msgRecieve);
-    correctPacks++;
-    }
 
   // ------- IMU ----------//
   // === Read gyroscope data === //
@@ -206,18 +174,10 @@ void loop() {
   Wire.write(0x43); // Gyro data first register address 0x43
   Wire.endTransmission(false);
   Wire.requestFrom(MPU, 6, true); // Read 4 registers total, each axis value is stored in 2 registers
-  GyroX = (Wire.read() << 8 | Wire.read()) / 131.0; // For a 250deg/s range we have to divide first the raw value by 131.0, according to the datasheet
-  GyroY = (Wire.read() << 8 | Wire.read()) / 131.0;
-  GyroZ = (Wire.read() << 8 | Wire.read()) / 131.0;
-  // Correct the outputs with the calculated error values
-  GyroX = GyroX + GyroErrorX; // GyroErrorX ~(-0.56)
-  GyroY = GyroY + GyroErrorY; // GyroErrorY ~(2)
-  GyroZ = GyroZ + GyroErrorZ; // GyroErrorZ ~ (-0.8)
-  // Currently the raw values are in degrees per seconds, deg/s, so we need to multiply by sendonds (s) to get the angle in degrees
-  roll = roll + GyroX * elapsedTime; // deg/s * s = deg
-  pitch = pitch + GyroY * elapsedTime;
-  yaw =  yaw + GyroZ * elapsedTime;
-  //Serial.println(roll);
+  GyroX = (Wire.read() << 8 | Wire.read()) / 131.0; // For a 250deg/s
+  if( ( GyroX < (GyroErrorX - 1.0) ) || ( GyroX > (GyroErrorX + 1.0)) )
+    roll = roll + GyroX * elapsedTime; // deg/s * s = deg
+
 /*
   // ------- SERVO ----------//
 
@@ -228,22 +188,6 @@ void loop() {
   distance = ultrasonic.read();      //print data in cm
 
   // ------- LCD ---------//
-
-  static String conecting = ".";
-  if(conect){
-    lcd.setCursor(0, 0);
-    lcd.print("Conected");
-    lcd.setCursor(0, 1);
-    lcd.print(correctPacks);
-  }
-  else{
-    lcd.setCursor(0, 0);
-    lcd.clear();
-    lcd.print("Conecting" + conecting);
-    conecting = conecting == "....." ? "." : conecting + ".";
-    delay(100);
-
-  }
   
   // Just visual feedback read a distance
   if(distance < 12){
@@ -254,21 +198,33 @@ void loop() {
   }
   else {
     lcd.setRGB(0, 255, 0);
+    centralEyesExprression();
   }
-
-  // ------- DIRECTION SENSOR ---------//
-
-  diretionRight = apdsRight.readGesture();
-  diretionLeft = apdsLeft.readGesture();
 
   //---------- ROBOT CONTROL -------//
 
   static long int t = millis();
 
-  vActual = (engineLeft.speedSensor->m_speed + engineRight.speedSensor->m_speed) / 2.0;
-  wActual = (RAIO_ROBOT * (engineLeft.speedSensor->m_speed - engineRight.speedSensor->m_speed)) / 2.0;
+  Serial.print("error: ");
+  Serial.print(error);
+  Serial.print("|  P: ");
+  Serial.print(P);
+  Serial.print("|  I: ");
+  Serial.print(I);
+  Serial.print("|  output: ");
+  Serial.print(output);
 
-  error = vR - vActual;
+  int rollTarget = 10;
+  float tolRoll = 1.0;
+
+  //vActual = (engineLeft.speedSensor->m_speed + engineRight.speedSensor->m_speed) / 2.0;
+  //wActual = (RAIO_ROBOT * (engineLeft.speedSensor->m_speed - engineRight.speedSensor->m_speed)) / 2.0;
+
+  error = rollTarget - roll;
+
+  if(abs(error) < tolRoll){
+    error = 0;
+  }
 
   count++;
 
@@ -280,37 +236,223 @@ void loop() {
 
   D = Kd * error / (millis() - t);
 
-  output +=  P + I + D;
+  output =  P;// + I + D;
 
-  //engineLeft.run(DEAD_ZONE_ENGINE_LEFT + (output/2.0));
-  //engineRight.run(DEAD_ZONE_ENGINE_RIGHT + (output/2.0));
-  if(msgRecieve == "->ML255MR255SV110\n"){
+  int outputMotorLeft = 0;
+  int outputMotorRight = 0;
+
+  if (output < 0){
+    outputMotorLeft = - (DEAD_ZONE_ENGINE_LEFT - output);
+    outputMotorRight = (DEAD_ZONE_ENGINE_RIGHT - output);
+  }
+  else{
+    outputMotorLeft = (DEAD_ZONE_ENGINE_LEFT + output);
+    outputMotorRight = -(DEAD_ZONE_ENGINE_RIGHT + output);
+  }
+
+  Serial.print("|  outputMotorLeft: ");
+  Serial.print(outputMotorLeft);
+  Serial.print("|  outputMotorRight: ");
+  Serial.println(outputMotorRight);
+
+  //---------- COLLISION -------//
+
+  if(digitalRead(PINO_END_CURSE_1) || 
+      digitalRead(PINO_END_CURSE_2)){
+
+    engineRight.run(-150);
     engineLeft.run(255);
+    leftEyeExprression();
+    delay(1000);
+
+  } else if(digitalRead(PINO_END_CURSE_3) || 
+            digitalRead(PINO_END_CURSE_4)){
+
     engineRight.run(255);
-    Serial.println("w");
-  }
-  //delay(1000);
-  if(msgRecieve == "->ML510MR510SV110\n"){
-    engineLeft.run(0);
-    engineRight.run(0);
-    Serial.println("s");
+    engineLeft.run(-150);
+    rightEyeExprression();
+    delay(1000);
+
   }
 
-    if(msgRecieve == "->ML255MR510SV110\n"){
-    engineLeft.run(255);
-    engineRight.run(-255);
-    Serial.println("a");
-  }
+  //---------- OUTPUT -------//
 
-    if(msgRecieve == "->ML510MR255SV110\n"){
-    engineLeft.run(-255);
-    engineRight.run(255);
-    Serial.println("d");
-  }
-
-
-  //delay(1000);
+  engineRight.run( outputMotorRight);
+  engineLeft.run(outputMotorLeft);
 
   t = millis();
 
+}
+
+void calculate_IMU_error(){
+  float samples = 100;
+  for (int i = 0; i < samples; i++){
+    // === Read gyroscope data === //
+    previousTime = currentTime;        // Previous time is stored before the actual time read
+    currentTime = millis();            // Current time actual time read
+    elapsedTime = (currentTime - previousTime) / 1000; // Divide by 1000 to get seconds
+    Wire.beginTransmission(MPU);
+    Wire.write(0x43); // Gyro data first register address 0x43
+    Wire.endTransmission(false);
+    Wire.requestFrom(MPU, 6, true); // Read 4 registers total, each axis value is stored in 2 registers
+    GyroErrorX += (Wire.read() << 8 | Wire.read()) / 131.0; // For a 250deg/s
+    delay(100);
+  }
+  GyroErrorX = GyroErrorX / samples;
+}
+
+void happyExprression(){
+  lcd.clear();
+  lcd.setCursor(1, 0);
+  lcd.write(5);
+  lcd.write(4);
+  lcd.write(2);
+  lcd.write(1);
+
+  lcd.setCursor(3, 1);
+  lcd.write(3);
+  lcd.write(6);
+
+  lcd.setCursor(1, 0);
+  lcd.write(7);
+  lcd.write(5);
+  lcd.write(5);
+  lcd.write(5);
+  lcd.write(7);
+
+  lcd.setCursor(0, 1);
+  lcd.write(6);
+  lcd.print("     ");
+  lcd.write(6);
+
+  lcd.setCursor(10, 0);
+  lcd.write(7);
+  lcd.write(5);
+  lcd.write(5);
+  lcd.write(5);
+  lcd.write(7);
+
+  lcd.setCursor(9, 1);
+  lcd.write(6);
+  lcd.print("     ");
+  lcd.write(6);
+}
+
+void neutralExprression(){
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.write(7);
+  lcd.write(7);
+  lcd.write(7);
+  lcd.write(7);
+  lcd.write(7);
+  lcd.write(7);
+
+  lcd.setCursor(0, 1);
+  lcd.write(6);
+  lcd.write(6);
+  lcd.write(6);
+  lcd.write(6);
+  lcd.write(6);
+  lcd.write(6);
+
+  lcd.setCursor(9, 0);
+  lcd.write(7);
+  lcd.write(7);
+  lcd.write(7);
+  lcd.write(7);
+  lcd.write(7);
+  lcd.write(7);
+
+  lcd.setCursor(9, 1);
+  lcd.write(6);
+  lcd.write(6);
+  lcd.write(6);
+  lcd.write(6);
+  lcd.write(6);
+  lcd.write(6);
+}
+
+void centralEyesExprression(){
+  lcd.clear();
+  lcd.setCursor(3, 0);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.setCursor(3, 1);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.rightToLeft();
+
+  lcd.setCursor(13, 0);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.setCursor(13, 1);
+  lcd.write(4);
+  lcd.write(4);
+}
+
+void blinckExprression(){ 
+  lcd.clear();
+  lcd.setCursor(3, 0);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.setCursor(3, 1);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.rightToLeft();
+
+  lcd.setCursor(13, 0);
+  lcd.write(7);
+  lcd.write(7);
+
+  lcd.setCursor(13, 1);
+  lcd.write(6);
+  lcd.write(6);
+}
+
+void leftEyeExprression(){
+  lcd.clear();
+  lcd.setCursor(1, 0);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.setCursor(1, 1);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.rightToLeft();
+
+  lcd.setCursor(11, 0);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.setCursor(11, 1);
+  lcd.write(4);
+  lcd.write(4);    
+}
+
+void rightEyeExprression(){
+  lcd.clear();
+  lcd.setCursor(4, 0);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.setCursor(4, 1);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.rightToLeft();
+
+  lcd.setCursor(14, 0);
+  lcd.write(4);
+  lcd.write(4);
+
+  lcd.setCursor(14, 1);
+  lcd.write(4);
+  lcd.write(4);
 }
